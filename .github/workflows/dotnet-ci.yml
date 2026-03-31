@@ -10,8 +10,52 @@ env:
   IMAGE_NAME: ${{github.repository}}
 
 jobs:
+  update-version:
+    name: Update Version in .csproj
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          VERSION="${TAG_NAME#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Из тега $TAG_NAME извлечена версия: $VERSION"
+
+      - name: Update version in .csproj
+        run: |
+          CSPROJ_FILE="MyFirstCI.Api/MyFirstCI.Api.csproj"
+          VERSION="${{ steps.get_version.outputs.version }}"
+          
+          if grep -q "<Version>" "$CSPROJ_FILE"; then
+            sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|" "$CSPROJ_FILE"
+            echo "Обновлен существующий тег Version на $VERSION"
+          else
+            sed -i "/<PropertyGroup>/a \ \ <Version>$VERSION</Version>" "$CSPROJ_FILE"
+            echo "Добавлен новый тег Version: $VERSION"
+          fi
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add MyFirstCI.Api/MyFirstCI.Api.csproj
+          git commit -m "Update version to ${{ steps.get_version.outputs.version }}" || echo "Нет изменений для коммита"
+          git push
+
   test:
     name: Run Tests
+    needs: update-version
     runs-on: ubuntu-latest
     
     steps:
@@ -81,13 +125,13 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Обязательно необходимо для создания релиза
+      contents: write
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Полная история для автоинкремента версии
+          fetch-depth: 0
 
       - name: Build application for release
         run: |
@@ -106,30 +150,27 @@ jobs:
       - name: Generate release notes from tag
         id: release_notes
         run: |
-          # Извлекаем сообщение коммита тега
           TAG_NAME="${GITHUB_REF##*/}"
           RELEASE_NOTES=$(git tag -l --format='%(contents)' "$TAG_NAME")
           
-          # Если нет сообщения, используем стандартное
           if [ -z "$RELEASE_NOTES" ]; then
             RELEASE_NOTES="Release $TAG_NAME"
           fi
           
-          # Сохраняем в output
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Determine if prerelease
         id: check_prerelease
         run: |
           TAG_NAME="${GITHUB_REF##*/}"
           if [[ "$TAG_NAME" == *"beta"* ]] || [[ "$TAG_NAME" == *"rc"* ]]; then
             echo "prerelease=true" >> $GITHUB_OUTPUT
-            echo "Это пре-релиз (beta/rc)"
           else
             echo "prerelease=false" >> $GITHUB_OUTPUT
-            echo "Это стабильный релиз"
           fi
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
