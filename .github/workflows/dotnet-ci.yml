@@ -51,8 +51,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add MyFirstCI.Api/MyFirstCI.Api.csproj
           git commit -m "Update version to ${{ steps.get_version.outputs.version }}" || echo "Нет изменений для коммита"
-          git push
-
+          
+          # Переключаемся на ветку main и пушим
+          git checkout main || git checkout -b main
+          git pull origin main --rebase || true
+          git push origin main
   test:
     name: Run Tests
     needs: update-version
