@@ -75,3 +75,60 @@ jobs:
             org.opencontainers.image.source=${{github.server_url}}/${{github.repository}}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Обязательно необходимо для создания релиза
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Полная история для автоинкремента версии
+
+      - name: Build application for release
+        run: |
+          dotnet restore
+          dotnet publish MyFirstCI.Api/MyFirstCI.Api.csproj \
+            -c Release \
+            -o ./publish-release \
+            --self-contained false \
+            -p:PublishSingleFile=false
+
+      - name: Create release archive
+        run: |
+          tar -czf my-app-release.tar.gz -C ./publish-release .
+          zip -r my-app-release.zip ./publish-release/*
+
+      - name: Generate release notes from tag
+        id: release_notes
+        run: |
+          # Извлекаем сообщение коммита тега
+          TAG_NAME="${GITHUB_REF##*/}"
+          RELEASE_NOTES=$(git tag -l --format='%(contents)' "$TAG_NAME")
+          
+          # Если нет сообщения, используем стандартное
+          if [ -z "$RELEASE_NOTES" ]; then
+            RELEASE_NOTES="Release $TAG_NAME"
+          fi
+          
+          # Сохраняем в output
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          draft: false
+          prerelease: false
+          files: |
+            my-app-release.tar.gz
+            my-app-release.zip
+          tag_name: ${{ github.ref_name }}
