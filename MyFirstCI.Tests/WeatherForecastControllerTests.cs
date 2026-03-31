@@ -31,9 +31,4 @@ public class WeatherForecastControllerTests
         // Assert
         Assert.Equal(5, result.Count());
     }
-    [Fact]
-    public void AlwaysRedTest()
-    {
-        Assert.True(false);
-    }
 }
