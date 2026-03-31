@@ -9,7 +9,6 @@ public class WeatherController : ControllerBase
     [HttpGet("WeatherForecast")]
     public IEnumerable<WeatherForecast> Get()
     {
-        // Оптимизированная версия API
         var forecast = Enumerable.Range(1, 5).Select(index =>
             new WeatherForecast
             (
