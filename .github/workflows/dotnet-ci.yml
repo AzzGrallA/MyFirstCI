@@ -119,7 +119,17 @@ jobs:
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-
+      - name: Determine if prerelease
+        id: check_prerelease
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          if [[ "$TAG_NAME" == *"beta"* ]] || [[ "$TAG_NAME" == *"rc"* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "Это пре-релиз (beta/rc)"
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "Это стабильный релиз"
+          fi
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -127,7 +137,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           body: ${{ steps.release_notes.outputs.notes }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.check_prerelease.outputs.prerelease }}
           files: |
             my-app-release.tar.gz
             my-app-release.zip
